@@ -230,7 +230,6 @@ if __name__=="__main__":
 
 
             valid_loss += loss.item()
-            train_loss.append(loss.item())
 
             if i % 5 == 0:
                 writer.add_scalars(cfg.model,

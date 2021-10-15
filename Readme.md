@@ -6,8 +6,8 @@ The configuration files are in the directory `config`. Now there is only one con
 
 - Training
 
-`python train.py`
+`python train.py --modelfile $your pretrained model root$ --data_root $your dataset root$`
+
+Other configuration is setted in config/Totaltext.py
 
 
-- demo
-- pretrain

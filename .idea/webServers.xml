@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="b58f16b5-a480-4c62-80e0-6b4cd57d0978" name="pei_group_detection">
+        <fileTransfer accessType="SFTP" host="219.223.251.171" port="22" sshConfigId="ec7a8968-1b3f-485f-a0c2-c0169718ff1f" sshConfig="pei_group@219.223.251.171:22 password">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>

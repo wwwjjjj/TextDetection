@@ -116,20 +116,29 @@ class CtdetLoss(torch.nn.Module):
 
         #3.计算宽高损失
         mask_weight = gt_map['dense_wh_mask'].sum() + 1e-4
-        #print(gt_map['dense_wh_mask'].shape,output_['wh'].shape,gt_map['dense_wh'].shape)
-        wh_loss+= self.crit_wh(output_['dense_wh'] * gt_map['dense_wh_mask'],
-                             gt_map['dense_wh'] * gt_map['dense_wh_mask']) /mask_weight
 
+        '''wh_loss+=self.crit_wh(output_['dense_wh']*gt_map['dense_wh_mask'],
+                                   gt_map['dense_wh']*gt_map['dense_wh_mask']#wh_pred[gt_map['dense_wh_mask']],gt_wh_map[gt_map['dense_wh_mask']]#* gt_map['dense_wh_mask'],
+                             ) /mask_weight'''
 
-        #4.计算中心点offsets
+        dense_mask=(gt_map['dense_wh_mask']==1)
+        wh_pred=output_['dense_wh'][dense_mask]
+        #print(gt_map['dense_wh'].shape)
+
+        wh_gt=gt_map['dense_wh'][dense_mask]
+        ones = wh_gt.new(wh_pred.size()).fill_(1.).double()
+        wh_loss+=F.smooth_l1_loss(wh_pred / wh_gt, ones)
+        print(wh_gt)
+        print(wh_pred)
+        #print(wh_loss.item())
         off_map=_sigmoid(output_['offsets'])
         off_loss += self.crit_reg(off_map,gt_map['off_mask'],
                                   gt_map['center_points'], gt_map['offsets'])
 
-        loss = opt.hm_weight * hm_loss+ opt.geo_weight * geo_loss+opt.off_weight *off_loss#
+        loss = opt.hm_weight * hm_loss+ opt.geo_weight * geo_loss+opt.off_weight *off_loss+opt.wh_weight*wh_loss#
         loss_stats = {'loss': loss, 'hm_loss': hm_loss,
                       'geo_loss': geo_loss,'wh_loss':wh_loss,'off_loss':off_loss}
-        pred_map.update({'hm':pred_hm,'wh':output_['dense_wh'] * gt_map['dense_wh_mask'],
+        pred_map.update({'hm':pred_hm,'dense_wh':output_['dense_wh']*gt_map['dense_wh_mask'],
                          'off':off_map})
         return loss, loss_stats,pred_map
 

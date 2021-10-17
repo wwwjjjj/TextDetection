@@ -2,11 +2,12 @@ import numpy as np
 from torch.utils.data import Dataset
 import os
 import Polygon as plg
-from code.tools.utils import pil_load_img,find_bottom,find_long_edges,draw_dense_reg,split_edge_seqence,norm2, shrink,get_centerpoints,draw_umich_gaussian,get_furthest_point_from_edge
+from code.tools.utils import judge, pil_load_img,find_bottom,find_long_edges,draw_dense_reg,split_edge_seqence,norm2, shrink,get_centerpoints,draw_umich_gaussian,get_furthest_point_from_edge
 import cv2
 import scipy.io as io
 from config.Totaltext import config as cfg
 import copy
+import matplotlib.pyplot as plt
 class TextInstance(object):
 
     def __init__(self, points, orient, text):
@@ -108,20 +109,24 @@ class TotalText(Dataset):
             center_x = polygons[i].center[0]
             center_y = polygons[i].center[1]
             center_points.append([int(center_x), int(center_y)])
+            offsets_mask[i] = 1
             index_of_ct[i]=int(center_y)*W+int(center_x)
-            if index_of_ct[i]<0 or index_of_ct[i]>=H*W:
+            if index_of_ct[i]<0 or index_of_ct[i]>=H*W or judge(center_x,H)==False or judge(center_y,W)==False:
                 #print("error")
                 index_of_ct[i]=0
+                offsets_mask[i]=0
+
             center_offsets[i][0] = int(center_x) -center_x
             center_offsets[i][1] = int(center_y) -center_y
 
-            offsets_mask[i]=1
+
         #3.得到四个方向的位置编码
         geo_map = np.zeros((4, H,W),np.float32)
         #4.得到四个方向的最大距离
         dense_wh = np.zeros((4,H,W))
         geo_max_dis=np.zeros((cfg.max_annotation,4),dtype=np.float32)
-        dense_wh_mask=np.stack([train_mask,train_mask,train_mask,train_mask])
+        #每个在文本区间中的像素点都可以预测wh
+        dense_wh_mask=np.zeros((4, H,W),np.uint8)#np.stack([train_mask,train_mask,train_mask,train_mask]).astype(np.uint8)
         #print(dense_wh_mask.shape)
         for k in range(len(polygons)):
             m = np.zeros((4, H, W), np.float32)
@@ -181,7 +186,10 @@ class TotalText(Dataset):
                         temp=min(m[tt][j][i],geo_map[tt][j][i]) if  m[tt][j][i]>0 and geo_map[tt][j][i]>0 else m[tt][j][i]
                         geo_map[tt][j][i]=temp
             geo_max_dis[k]=mmax
+        #对于在任意一个多边形内的点，dense_wh被填上其所在的多边形的四个方向的最大值，如果同时在
+        #两个多边形内部，那么填上较小的那个多边形对应的4个值
         #5.得到中心点heatmap
+        #print(geo_max_dis)
         heatmap = np.zeros((H, W), np.float32)
         for k in range(len(polygons)):
             rect = cv2.minAreaRect(polygons[k].points.astype(np.int32))
@@ -191,6 +199,16 @@ class TotalText(Dataset):
             radius = int(min(np.sqrt(area),1.5*np.abs(cv2.pointPolygonTest(polygons[k].points.astype(np.int32), center_points[k], True))))+1
             draw_umich_gaussian(heatmap, center_points[k], radius)
             draw_dense_reg(dense_wh, heatmap, center_points[k], geo_max_dis[k],radius)
+            draw_dense_reg(dense_wh_mask,heatmap,center_points[k],[1,1,1,1],radius)
+            #print(geo_max_dis[k][0])
+            '''cv2.fillPoly(dense_wh[0], [polygons[k].points.astype(np.int32)], int(geo_max_dis[k][0]))
+            cv2.fillPoly(dense_wh[1], [polygons[k].points.astype(np.int32)], int(geo_max_dis[k][1]))
+            cv2.fillPoly(dense_wh[2], [polygons[k].points.astype(np.int32)], int(geo_max_dis[k][2]))
+            cv2.fillPoly(dense_wh[3], [polygons[k].points.astype(np.int32)], int(geo_max_dis[k][3]))'''
+        '''print(np.nonzero(dense_wh.reshape(-1)))
+        print(np.nonzero(dense_wh_mask.reshape(-1)))'''
+        #print(dense_wh[dense_wh_mask==1])
+        #print(np.nonzero(dense_wh_mask.reshape(-1)==1))
 
         return tr_mask,train_mask,geo_map,index_of_ct,heatmap,dense_wh,center_offsets,dense_wh_mask,offsets_mask
 
@@ -243,12 +261,11 @@ class TotalText(Dataset):
 
         tr_mask,train_mask,m,index_of_ct,heatmap,dense_wh,center_offsets,dense_wh_mask,offsets_mask=self.generate_label(image,polygons)
 
-        #print(dense_wh.shape)
 
         image = image.transpose(2,0,1)  # 0, 3, 1, 2
         ret={'input':image,'hm':heatmap[np.newaxis,:],'trm':train_mask[np.newaxis,:],
              'hm_t':(m[0])[np.newaxis,:],'hm_b':(m[1])[np.newaxis,:],'hm_l':(m[2])[np.newaxis,:],'hm_r':(m[3])[np.newaxis,:],
-             'dense_wh':dense_wh[np.newaxis,:],'offsets':center_offsets,'dense_wh_mask':dense_wh_mask,'off_mask':offsets_mask,
+             'dense_wh':dense_wh,'offsets':center_offsets,'dense_wh_mask':dense_wh_mask,'off_mask':offsets_mask,
              'center_points':index_of_ct
              }
 

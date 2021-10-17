@@ -196,12 +196,13 @@ class RandomResizedLimitCrop(object):
             for polygon in polygons_:
                 new_c_x = (polygon.center[0]-j)*scales[0]
                 new_c_y = (polygon.center[1]-i)*scales[1]
-                if new_c_x<0 or new_c_x>=h or new_c_y<0 or new_c_y>=w:
+                '''if new_c_x<0 or new_c_x>=h or new_c_y<0 or new_c_y>=w:
 
                     return self.extra(image,polygons)
                 else:
 
-                    polygon.center=[new_c_x,new_c_y]
+                    '''
+                polygon.center=[new_c_x,new_c_y]
 
                 polygon.points[:, 0] = (polygon.points[:, 0] - j) * scales[0]
                 polygon.points[:, 1] = (polygon.points[:, 1] - i) * scales[1]

@@ -19,7 +19,7 @@ config.heads = {'hm_t': 1, 'hm_l': 1,
 config.batch_size = 8
 # weight
 config.hm_weight=1
-config.wh_weight=1
+config.wh_weight=10
 config.geo_weight=10
 config.off_weight=1
 

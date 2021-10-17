@@ -22,7 +22,7 @@ import argparse
 import cv2
 from code.tools.utils import draw_umich_gaussian,gaussian_radius
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
-#os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 torch.autograd.set_detect_anomaly(True)
 def _sigmoid(x):
@@ -38,8 +38,8 @@ def display(id,image,gt_map,pred_map):
     plt.imshow((pred_map['hm']).cpu().detach().numpy()[0][0])
     plt.show()
 
-    plt.imshow((pred_map['hm_t']).cpu().detach().numpy()[0][0])
-    plt.show()
+#    plt.imshow((gt_map['dense_wh']).cpu().detach().numpy()[0][0])
+  #  plt.show()
 
     plt.imshow((pred_map['hm_b']).cpu().detach().numpy()[0][0])
     plt.show()
@@ -81,7 +81,7 @@ if __name__=="__main__":
     # ---------------- ARGS AND CONFIGS ----------------
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--modelfile', type=str, default="/home/pei_group/jupyter/Wujingjing/Text_Detection/save_models/Hourglass_epoch1_106.6700.pt")
+    parser.add_argument('--modelfile', type=str, default="/home/pei_group/jupyter/Wujingjing/Text_Detection/save_models/Hourglass_epoch55_71.7055.pt")
     parser.add_argument('--data_root', type=str, default="/home/pei_group/jupyter/Wujingjing/data/totaltext/")
     opt = parser.parse_args()
     print("--- TRAINING ARGS ---")
@@ -134,12 +134,13 @@ if __name__=="__main__":
 
         model = get_large_hourglass_net(18, cfg.heads, 64,checkpoint).cuda()
         criterion = CtdetLoss(cfg)
+        print(model)
     elif cfg.model == 'ResNet':
         model = get_pose_net(101, cfg.heads, 64).cuda()
         criterion = CtdetLoss(cfg)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=cfg.lr)
-    scheduler = lr_scheduler.StepLR(optimizer, step_size=10000, gamma=0.94)
+    scheduler = lr_scheduler.StepLR(optimizer, step_size=2, gamma=0.94)
     writer_dir = os.path.join(cfg.write_dir, cfg.model)
     if os.path.exists(writer_dir):
         shutil.rmtree(writer_dir, ignore_errors=True)
@@ -199,6 +200,7 @@ if __name__=="__main__":
                                              ("wh_loss",loss_stas['wh_loss'].item()),
                                              ("off_loss", loss_stas['off_loss'].item())
                                              ])
+
         print('EPOCH<', e+int(start_epoch), '>: train loss:', running_loss / i if i>0 else running_loss
               )
         # ---------------- VALIDATION ----------------
@@ -249,7 +251,7 @@ if __name__=="__main__":
                                                            ])
         scheduler.step()
         print('EPOCH<', e+int(start_epoch), '>: valid loss:', valid_loss / i)
-        torch.save(model.state_dict(), os.path.join(cfg.model_savedir, cfg.model+"_epoch%d_%.4f.pt" % (e+int(start_epoch), valid_loss)))
+        torch.save(model.state_dict(), os.path.join(cfg.model_savedir, cfg.model+"_epoch%d_%.4f.pt" % (e+int(start_epoch)+1, valid_loss)))
         print("epoch {} save done!".format(e+int(start_epoch)))
         # best models
         if valid_loss < best_loss:

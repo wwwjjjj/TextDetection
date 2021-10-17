@@ -254,6 +254,21 @@ class exkp(nn.Module):
                 self.__setattr__(head, module)
                 for heat in self.__getattr__(head):
                     heat[-1].bias.data.fill_(-2.19)
+            if 'dense_wh' in head:
+                '''module=nn.ModuleList([
+                    nn.Sequential(
+                        nn.Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1)),
+                        nn.ReLU(inplace=True),
+                        nn.Conv2d(256, 4, kernel_size=(1, 1), stride=(1, 1))
+                    ) for _ in range(nstack)
+
+                ])'''
+                module = nn.ModuleList([
+                    make_regr_layer(
+                        cnv_dim, curr_dim, heads[head]) for _ in range(nstack)
+
+                ])
+                self.__setattr__(head, module)
             else:
                 module = nn.ModuleList([
                     make_regr_layer(

@@ -22,7 +22,7 @@ from PIL import Image
 import scipy.io as io
 import cv2
 from code.tools.utils import shrink,get_centerpoints,draw_umich_gaussian,draw_dense_reg
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 from code.dataset import TextInstance
 def _sigmoid(x):
@@ -172,11 +172,15 @@ def display_gt(transform,image,anno_dir):
         polygons[i].find_centerline(15)
     _,polygons=transform(image,polygons)
     tr_mask, train_mask, geo_map, index_of_ct, heatmap, dense_wh, center_offsets, dense_wh_mask, offsets_mask =generate_label(cfg.input_size//cfg.downsample,polygons)
-    ret = { 'input': image, 'hm': heatmap[np.newaxis, :]*255, 'train_mask': train_mask,
+    ret = { 'input': image, 'hm': heatmap[np.newaxis, :]*255, 'train_mask': train_mask,'tr_mask':tr_mask,
            'hm_t': (geo_map[0])[np.newaxis, :], 'hm_b': (geo_map[1])[np.newaxis, :], 'hm_l': (geo_map[2])[np.newaxis, :],
            'hm_r': (geo_map[3])[np.newaxis, :],'dense_wh':dense_wh[np.newaxis,:]
            }
     plt.imshow(ret['input'])
+    plt.show()
+    plt.imshow(ret['tr_mask'].squeeze())
+    plt.show()
+    plt.imshow(ret['hm'].squeeze())
     plt.show()
     plt.imshow(ret['hm_t'].squeeze())
     plt.show()
@@ -216,26 +220,61 @@ def display_gt(transform,image,anno_dir):
 def inference(maps):
     #heatmap=_sigmoid(maps['hm']).detach().cpu().numpy()[0][0]
     heatmap=local_max(_sigmoid(maps['hm']))#.detach().cpu().numpy()[0][0]
+    #print(_sigmoid(maps['hm']).max())
     #tr = _sigmoid(maps['tr']).detach().cpu().numpy()[0][0]
     hm_t=_sigmoid(maps['hm_t']).detach().cpu().numpy()[0][0]
     hm_b = _sigmoid(maps['hm_b']).detach().cpu().numpy()[0][0]
     hm_l = _sigmoid(maps['hm_l']).detach().cpu().numpy()[0][0]
     hm_r = _sigmoid(maps['hm_r']).detach().cpu().numpy()[0][0]
-    cv2.imshow("image_t", heatmap)
-    cv2.waitKey(0)
-
-    top_x, top_y = topK(heatmap,K=cfg.K)
+    tblr=(_sigmoid(maps['dense_wh'])).detach().cpu().numpy()[0]
+    print(tblr.shape)
+    print(_sigmoid(maps['hm']).cpu().detach().numpy()[0][0].shape)
+    plt.imshow(_sigmoid(maps['hm']).cpu().detach().numpy()[0][0])
+    plt.show()
     plt.imshow(hm_t)
     plt.show()
+    plt.imshow(hm_b)
+    plt.show()
+    plt.imshow(hm_l)
+    plt.show()
+    plt.imshow(hm_r)
+    plt.show()
+    #plt.imshow( heatmap.cpu().detach().numpy()[0][0])
+    #cv2.waitKey(0)
 
-    cv2.waitKey(0)
+    top_x, top_y = topK(heatmap,K=cfg.K)
+    step_sizes=np.zeros((len(top_x),4))
+    for i in range(len(top_x)):
+        center_mask=np.zeros((128,128),np.uint8)
+        cv2.circle(center_mask,[int(top_x[i]),int(top_y[i])],2,1,-1)
+        #print(np.sum(center_mask),np.sum(tblr*center_mask))
+        for j in range(4):
+            step_sizes[i,j]=(np.sum(tblr[j]*center_mask))/(np.sum(center_mask))
+    '''plt.imshow(_sigmoid(maps['hm']).detach().cpu().numpy()[0][0])
+    plt.show()
+
+    plt.imshow(tblr[0])
+    plt.show()
+
+    plt.imshow(hm_t)
+    plt.show()
+    plt.imshow(hm_b)
+    plt.show()
+    plt.imshow(hm_l)
+    plt.show()
+    plt.imshow(hm_r)
+    plt.show()'''
+
+
+    #cv2.waitKey(0)
     instances=[]
     for i in range(len(top_x)):
-        instances.append((Diffusion(int(top_x[i]), int(top_y[i]), hm_t, hm_b, hm_l, hm_r)))
+        instances.append((Diffusion(step_sizes[i],int(top_x[i]), int(top_y[i]), hm_t, hm_b, hm_l, hm_r)))
     i=0
 
 
     while i<cfg.max_diffusion:
+
         i = i + 1
         points_x = []
         points_y = []
@@ -243,22 +282,25 @@ def inference(maps):
         stop_count=0
 
         for j in range(len(top_x)):
+            print(len(top_x),stop_count)
             if instances[j].walk_flag==False:
                 stop_count+=1
+                points_x.extend(instances[j].x_values)
+                points_y.extend(instances[j].y_values)
                 continue
             nums.append(instances[j].fill_walk())
             points_x.extend(instances[j].x_values)
             points_y.extend(instances[j].y_values)
         if stop_count == len(top_x):
-
             break
         plt.xlim((0, 128))
         plt.ylim((0, 128))
         plt.xlabel('x')
         plt.ylabel('y')
+        plt.title(i)
 
         plt.scatter(points_x, points_y, cmap='Blues', edgecolor='none')
-        plt.scatter(148, 176, c='green', edgecolors='none', s=100)
+        #plt.scatter(148, 176, c='green', edgecolors='none', s=100)
         ax = plt.gca()
         ax.xaxis.set_ticks_position('top')  # 将X坐标轴移到上面
         ax.invert_yaxis()
@@ -286,6 +328,8 @@ def demo(data_dir,modelfile,anno_dir):
     model.eval()
     image=Image.open(data_dir)
     image_=np.array(image)
+    plt.imshow(cv2.resize(image_,(128,128)))
+    plt.show()
 
     transform=Compose([
         Resize(cfg.input_size),
@@ -296,18 +340,35 @@ def demo(data_dir,modelfile,anno_dir):
     image = image.transpose(2, 0, 1)
     image=image[np.newaxis,:]
     input_image=torch.from_numpy(image).cuda()
-    gt_transform = BaseTransform(size=cfg.input_size // cfg.downsample, mean=cfg.means,
-                                 std=cfg.stds) if cfg.downsample > 0 else None
+    gt_transform = BaseTransform(size=cfg.input_size // cfg.downsample, mean=cfg.means,std=cfg.stds) if cfg.downsample > 0 else None
     display_gt(gt_transform, image_, anno_dir)
     model.eval()
     output=model(input_image)
 
     polygons_of_01=inference(output[0])
     temp=np.zeros((128,128),np.uint8)
+    temp_=np.zeros((128,128),np.uint8)
     for i in range(len(polygons_of_01)):
+        cv2.polylines(temp_, [polygons_of_01[i]], 1, 255)
         cv2.fillPoly(temp,[polygons_of_01[i]],color=255)
-    cv2.imshow('pred', temp)
-    cv2.waitKey(0)
+    plt.xlim((0, 128))
+    plt.ylim((0, 128))
+    plt.xlabel('x')
+    plt.ylabel('y')
+    plt.title("final result")
+    plt.imshow(temp)
+
+    ax = plt.gca()
+    ax.xaxis.set_ticks_position('top')  # 将X坐标轴移到上面
+    ax.invert_yaxis()
+    plt.show()
+
+    plt.imshow(temp_)
+
+    ax = plt.gca()
+    #ax.xaxis.set_ticks_position('top')  # 将X坐标轴移到上面
+    #ax.invert_yaxis()
+    plt.show()
 
 
 
@@ -324,13 +385,13 @@ if __name__=='__main__':
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--modelfile', type=str,
-                        default="/home/pei_group/jupyter/Wujingjing/Text_Detection/save_models/Hourglass_epoch1_106.6700.pt")
-    parser.add_argument('--data_root', type=str, default="/home/pei_group/jupyter/Wujingjing/data/totaltext/Images/Test/img603.jpg")
+                        default="/home/pei_group/jupyter/Wujingjing/Text_Detection/save_models/Hourglass_epoch55_71.7055.pt")
+    parser.add_argument('--data_root', type=str, default="/home/pei_group/jupyter/Wujingjing/data/totaltext/Images/Test/img96.jpg")
     parser.add_argument('--anno_dir', type=str,
-                        default="/home/pei_group/jupyter/Wujingjing/data/totaltext/gt/Test/poly_gt_img603.mat")
+                        default="/home/pei_group/jupyter/Wujingjing/data/totaltext/gt/Test/poly_gt_img96.mat")
 
     opt = parser.parse_args()
     print("--- TRAINING ARGS ---")
     print(opt)
 
-    demo(opt.data_dir,opt.modelfiles,opt.anno_dir)
+    demo(opt.data_root,opt.modelfile,opt.anno_dir)

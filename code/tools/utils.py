@@ -75,7 +75,10 @@ def find_long_edges(points, bottoms):
         i = (i + 1) % n_pts
     return long_edge_1, long_edge_2
 
-
+def judge(x,L):
+    if x>=0 and x<L:
+        return True
+    return False
 def split_edge_seqence(points, long_edge, n_parts):
 
     edge_length = [norm2(points[e1] - points[e2]) for e1, e2 in long_edge]
@@ -426,7 +429,7 @@ def draw_dense_reg(regmap, heatmap, center, value, radius, is_offset=False):
     diameter = 2 * radius + 1
     gaussian = gaussian2D((diameter, diameter), sigma=diameter / 6)
     value = np.array(value, dtype=np.float32).reshape(-1, 1, 1)
-    dim = value.shape[0]#2？
+    dim = value.shape[0]#4？
     reg = np.ones((dim, diameter * 2 + 1, diameter * 2 + 1), dtype=np.float32) * value
     #对于heatmap不为0的区域，都会填上宽高信息
     if is_offset and dim == 2:
@@ -452,8 +455,10 @@ def draw_dense_reg(regmap, heatmap, center, value, radius, is_offset=False):
         idx = (masked_gaussian >= masked_heatmap).reshape(
             1, masked_gaussian.shape[0], masked_gaussian.shape[1])
         masked_regmap = (1 - idx) * masked_regmap + idx * masked_reg
+    #print(masked_regmap.shape,masked_regmap)
     regmap[:, y - top:y + bottom, x - left:x + right] = masked_regmap
     return regmap
+
 def draw_contour_on_mask(size, cnt):
     mask = np.zeros(size, dtype='uint8')
     mask = cv2.drawContours(mask, [cnt], -1, 255, -1)
